@@ -60,7 +60,7 @@ def get_vlan(device, vid):
     Returns:
         dictionary:
             if VLAN exists - k/v pairs include vlan_id, name,
-                vlan_state
+                vlan_state, mode and admin_state
             else: returns empty dictionary
 
     """
@@ -78,6 +78,12 @@ def get_vlan(device, vid):
         vlan['vlan_id'] = str(vdata['vlanshowbr-vlanid-utf'])
         vlan['name'] = str(vdata['vlanshowbr-vlanname'])
         vlan['vlan_state'] = str(vdata['vlanshowbr-vlanstate'])
+        mdata = data_dict['ins_api']['outputs']['output']['body'].get(
+            'TABLE_mtuinfoid')['ROW_mtuinfoid']
+        if str(mdata['vlanshowinfo-vlanmode']) == 'fabricpath-vlan':
+            vlan['mode'] = 'fabricpath'
+        elif str(mdata['vlanshowinfo-vlanmode']) == 'ce-vlan':
+            vlan['mode'] = 'ce'
         state = str(vdata['vlanshowbr-shutstate'])
 
         if state == 'shutdown':

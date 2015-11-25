@@ -27,6 +27,7 @@ Ansible modules and in addition, general development.
 try:
     import xmltodict
     import re
+    import itertools
     from pycsco.nxos.error import CLIError
 except ImportError as e:
     print '*' * 30
@@ -38,15 +39,17 @@ __all__ = ['cmd_list_to_string', 'create_dir', 'feature_enabled',
            'get_existing_portchannel_to_vpc_mappings', 'get_facts', 'get_vrf',
            'get_feature_list', 'get_hsrp_group', 'get_interface_mode',
            'get_hsrp_groups_on_interfaces', 'vlan_range_to_list',
-           'switch_files_list', 'get_interface', 'get_interface_detail',
-           'get_interface_type', 'get_interfaces_dict', 'get_ipv4_interface',
-           'get_list_of_vlans', 'get_vlan_info', 'get_min_links', 'get_mtu',
-           'get_neighbors', 'get_portchannel', 'get_portchannel_list',
-           'get_portchannel_vpc_config', 'get_switchport', 'get_system_mtu',
-           'get_udld_global', 'get_udld_interface', 'get_vlan', 'get_vpc',
-           'get_vpc_running_config', 'get_vrf_list', 'peer_link_exists',
+           'vlan_list_to_range','switch_files_list', 'get_interface',
+           'get_interface_detail','get_interface_type', 'get_interfaces_dict',
+           'get_ipv4_interface', 'get_list_of_vlans', 'get_vlan_info',
+           'get_min_links', 'get_mtu', 'get_neighbors', 'get_portchannel',
+           'get_portchannel_list', 'get_portchannel_vpc_config', 'get_switchport',
+           'get_system_mtu', 'get_udld_global', 'get_udld_interface', 'get_vlan',
+           'get_vpc', 'get_vpc_running_config', 'get_vrf_list', 'peer_link_exists',
            'interface_is_portchannel', 'is_default', 'is_interface_copper',
-           'delete_dir','interface_range_to_list']
+           'delete_dir', 'interface_range_to_list',
+           'get_switchport_trunk_config_commands_add_vlan',
+           'get_switchport_trunk_config_commands_remove_vlan']
 
 
 def get_vlan(device, vid):
@@ -246,6 +249,31 @@ def vlan_range_to_list(vlans):
 
     return final
 
+def vlan_list_to_range(vlans):
+    """Converts a list of VLAN(s) to a string of ranges
+
+    Example:
+        Input (vlans): [1,2,3,4,10,20,21,22,30,32,33]
+        Returns: '1-4,10,20-22,30,32-33'
+
+    Args:
+        vlans (list): User input parameter of a list of VLAN(s)
+    Returns:
+        str: string of all VLAN ranges in the list
+    """    
+
+    def ranges(i):
+        i = [int(x) for x in i]
+        for a, b in itertools.groupby(enumerate(sorted(i)), lambda (x, y): y - x):
+            b = list(b)
+            yield b[0][1], b[-1][1]
+    
+    vlan_ranges = list(ranges(vlans))
+    final = ''
+    for each in vlan_ranges:
+        final = final + str(each[0]) + '-' + str(each[1]) + ','
+    final = final.rstrip(',')
+    return final
 
 def _modify_admin_state(value):
     """Internal method used to manipluate admin_state to streamline UX
@@ -926,7 +954,73 @@ def get_switchport_config_commands(device, switchport, port):
 
     return commands
 
+def get_switchport_trunk_config_commands_add_vlan(device, switchport, port):
+    """Gets commands required to config a given switchport interface when
+       adding vlans to a trunk
 
+    Args:
+        device (Device): This is the device object of an NX-API enabled device
+            using the Device class within device.py
+        switchport (set): parameters to be configured (from Ansible module)
+        port (str): full name of interface to be configured, i.e. Ethernet1/1
+
+    Returns:
+        list: ordered list of commands to be sent to device
+
+    Note:
+        Specific for Ansible module(s).  Not to be called otherwise.
+
+    """
+    CONFIG_ARGS = {
+        'mode': 'switchport mode {mode}',
+        'native_vlan': 'switchport trunk native vlan {native_vlan}',
+        'trunk_vlans': 'switchport trunk allowed vlan add {trunk_vlans}',
+    }
+
+    commands = []
+    switchport = dict(switchport)
+    for param, value in switchport.iteritems():
+        command = CONFIG_ARGS.get(param, 'DNE').format(**switchport)
+        if command and command != 'DNE':
+            commands.append(command)
+
+    commands.insert(0, 'interface ' + port)
+
+    return commands
+
+def get_switchport_trunk_config_commands_remove_vlan(device, switchport, port):
+    """Gets commands required to config a given switchport interface when
+       adding vlans to a trunk
+
+    Args:
+        device (Device): This is the device object of an NX-API enabled device
+            using the Device class within device.py
+        switchport (set): parameters to be configured (from Ansible module)
+        port (str): full name of interface to be configured, i.e. Ethernet1/1
+
+    Returns:
+        list: ordered list of commands to be sent to device
+
+    Note:
+        Specific for Ansible module(s).  Not to be called otherwise.
+
+    """
+    CONFIG_ARGS = {
+        'mode': 'switchport mode {mode}',
+        'native_vlan': 'switchport trunk native vlan {native_vlan}',
+        'trunk_vlans': 'switchport trunk allowed vlan remove {trunk_vlans}',
+    }
+
+    commands = []
+    switchport = dict(switchport)
+    for param, value in switchport.iteritems():
+        command = CONFIG_ARGS.get(param, 'DNE').format(**switchport)
+        if command and command != 'DNE':
+            commands.append(command)
+
+    commands.insert(0, 'interface ' + port)
+
+    return commands
 def clean_up_interface_vlan_configs(proposed, existing):
     """Removes unecessary and unused configs
        i.e. removes access vlan configs if a trunk port is being configured

@@ -14,49 +14,36 @@ except ImportError as e:
     print e
     print '***************************'
 
-
 class HTTPSConnection(HTTPConnection):
-
-    '''This class allows communication via SSL.'''
+    "This class allows communication via SSL."
 
     default_port = HTTPS_PORT
 
-    def __init__(
-        self,
-        host,
-        port=None,
-        key_file=None,
-        cert_file=None,
-        strict=None,
-        timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
-        source_address=None
-    ):
-
-        HTTPConnection.__init__(
-            self,
-            host,
-            port,
-            strict,
-            timeout,
-            source_address,
-            )
+    def __init__(self, host, port=None, key_file=None, cert_file=None,
+                 strict=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+                 source_address=None, context=None):
+        HTTPConnection.__init__(self, host, port, strict, timeout,
+                                source_address)
         self.key_file = key_file
         self.cert_file = cert_file
+        if context is None:
+            context = ssl._create_unverified_context()
+        if key_file or cert_file:
+            context.load_cert_chain(cert_file, key_file)
+        self._context = context
 
     def connect(self):
-        '''Connect to a host on a given (SSL) port.'''
+        "Connect to a host on a given (SSL) port."
 
-        sock = socket.create_connection((self.host, self.port),
-                                        self.timeout, self.source_address)
+        HTTPConnection.connect(self)
+
         if self._tunnel_host:
-            self.sock = sock
-            self._tunnel()
+            server_hostname = self._tunnel_host
+        else:
+            server_hostname = self.host
 
-        # this is the only line we modified from the httplib.py file
-        # we added the ssl_version variable
-        self.sock = ssl.wrap_socket(sock, self.key_file,
-                                    self.cert_file,
-                                    ssl_version=ssl.PROTOCOL_SSLv3)
+        self.sock = self._context.wrap_socket(self.sock,
+                                              server_hostname=server_hostname)
 
 
 httplib.HTTPSConnection = HTTPSConnection
@@ -130,7 +117,7 @@ class RespFetcher:
         req.add_header('Cookie', '%s' % cookie)
         try:
             with contextlib.closing(urllib2.urlopen(req,
-                                    timeout=timeout)) as resp:
+                                   timeout=timeout)) as resp:
                 resp_str = resp.read()
                 resp_headers = resp.info()
                 return (resp_headers, resp_str)

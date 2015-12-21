@@ -49,7 +49,8 @@ class Device():
                  username='cisco',
                  password='cisco',
                  ip='192.168.200.50',
-                 protocol='http'):
+                 protocol='http',
+                 port=None):
 
         if protocol not in ('http', 'https'):
             raise ValueError('protocol must be http or https')
@@ -58,8 +59,12 @@ class Device():
         self.password = password
         self.ip = ip
         self.protocol = protocol
+        self.port = port
         self.sw1 = NXAPI()
-        self.sw1.set_target_url('%s://%s/ins' % (self.protocol, self.ip))
+        if self.port is not None:
+            self.sw1.set_target_url('%s://%s:%s/ins' % (self.protocol, self.ip, self.port))
+        else:    
+            self.sw1.set_target_url('%s://%s/ins' % (self.protocol, self.ip))
         self.sw1.set_username(self.username)
         self.sw1.set_password(self.password)
 

@@ -59,7 +59,7 @@ class HTTPSConnection(HTTPConnection):
                                     ssl_version=ssl.PROTOCOL_SSLv3)
 
 
-httplib.HTTPSConnection = HTTPSConnection
+#httplib.HTTPSConnection = HTTPSConnection
 
 
 class RequestMsg:
